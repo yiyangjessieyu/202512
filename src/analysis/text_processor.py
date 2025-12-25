@@ -336,7 +336,8 @@ Limit to maximum 10 entities per text."""
                 extracted_entities=[],
                 sentiment=None,
                 topics=[],
-                keywords=[]
+                keywords=[],
+                confidence_scores={"overall": 0.0, "entity_extraction": 0.0, "topic_classification": 0.0}
             )
         
         try:
@@ -375,15 +376,22 @@ Limit to maximum 10 entities per text."""
             # Extract keywords (simple approach - could be enhanced)
             keywords = self._extract_keywords(caption_text)
             
+            # Calculate confidence scores
+            confidence_scores = self._calculate_text_confidence_scores(
+                unique_entities, topics, keywords, caption, hashtags
+            )
+            
             logger.info(f"Caption analysis completed: {len(unique_entities)} entities, "
-                       f"{len(topics)} topics, {len(keywords)} keywords")
+                       f"{len(topics)} topics, {len(keywords)} keywords, "
+                       f"overall confidence: {confidence_scores.get('overall', 0.0):.2f}")
             
             return TextAnalysis(
                 content_id="",  # Will be set by caller
                 extracted_entities=unique_entities,
                 sentiment=None,  # Could be added later
                 topics=topics,
-                keywords=keywords
+                keywords=keywords,
+                confidence_scores=confidence_scores
             )
             
         except Exception as e:
@@ -393,7 +401,8 @@ Limit to maximum 10 entities per text."""
                 extracted_entities=[],
                 sentiment=None,
                 topics=[],
-                keywords=[]
+                keywords=[],
+                confidence_scores={"overall": 0.0, "entity_extraction": 0.0, "topic_classification": 0.0, "error": str(e)}
             )
     
     def analyze_hashtags(self, hashtags: List[str]) -> Dict[str, any]:
@@ -454,6 +463,75 @@ Limit to maximum 10 entities per text."""
                 'entities': []
             }
     
+    def _calculate_text_confidence_scores(self, entities: List[Entity], topics: List[str], 
+                                        keywords: List[str], caption: str, hashtags: List[str]) -> Dict[str, float]:
+        """
+        Calculate confidence scores for text analysis components.
+        
+        Args:
+            entities: Extracted entities
+            topics: Identified topics
+            keywords: Extracted keywords
+            caption: Original caption text
+            hashtags: Extracted hashtags
+            
+        Returns:
+            Dictionary of confidence scores
+        """
+        confidence_scores = {}
+        
+        # Entity extraction confidence (average of individual entity confidences)
+        if entities:
+            entity_confidences = [entity.confidence for entity in entities]
+            confidence_scores["entity_extraction"] = sum(entity_confidences) / len(entity_confidences)
+        else:
+            # Lower confidence if no entities found in non-empty text
+            confidence_scores["entity_extraction"] = 0.3 if caption.strip() else 0.0
+        
+        # Topic classification confidence (based on hashtag categorization success)
+        if hashtags:
+            categorized_hashtags = 0
+            for topic in topics:
+                if topic != 'other':  # 'other' means uncategorized
+                    categorized_hashtags += 1
+            
+            if len(hashtags) > 0:
+                confidence_scores["topic_classification"] = categorized_hashtags / len(hashtags)
+            else:
+                confidence_scores["topic_classification"] = 0.0
+        else:
+            # No hashtags means lower topic classification confidence
+            confidence_scores["topic_classification"] = 0.2 if topics else 0.0
+        
+        # Keyword extraction confidence (based on text length and keyword count)
+        if caption.strip():
+            text_length = len(caption.strip().split())
+            keyword_ratio = len(keywords) / max(text_length, 1)
+            # Good keyword extraction should have 10-30% of words as keywords
+            if 0.1 <= keyword_ratio <= 0.3:
+                confidence_scores["keyword_extraction"] = 0.9
+            elif 0.05 <= keyword_ratio <= 0.5:
+                confidence_scores["keyword_extraction"] = 0.7
+            else:
+                confidence_scores["keyword_extraction"] = 0.5
+        else:
+            confidence_scores["keyword_extraction"] = 0.0
+        
+        # Overall confidence (weighted average)
+        weights = {
+            "entity_extraction": 0.5,  # Most important
+            "topic_classification": 0.3,
+            "keyword_extraction": 0.2
+        }
+        
+        overall_confidence = 0.0
+        for component, weight in weights.items():
+            overall_confidence += confidence_scores.get(component, 0.0) * weight
+        
+        confidence_scores["overall"] = overall_confidence
+        
+        return confidence_scores
+
     def _extract_keywords(self, text: str) -> List[str]:
         """
         Extract keywords from text using simple heuristics.
@@ -539,15 +617,21 @@ Limit to maximum 10 entities per text."""
             # Combine topics
             all_topics = list(set(caption_analysis.topics + hashtag_analysis['topics']))
             
+            # Recalculate confidence scores for combined analysis
+            combined_confidence_scores = self._calculate_text_confidence_scores(
+                unique_entities, all_topics, caption_analysis.keywords, caption, hashtags
+            )
+            
             logger.info(f"Text processing completed: {len(unique_entities)} entities, "
-                       f"{len(all_topics)} topics")
+                       f"{len(all_topics)} topics, overall confidence: {combined_confidence_scores.get('overall', 0.0):.2f}")
             
             return TextAnalysis(
                 content_id="",  # Will be set by caller
                 extracted_entities=unique_entities,
                 sentiment=caption_analysis.sentiment,
                 topics=all_topics,
-                keywords=caption_analysis.keywords
+                keywords=caption_analysis.keywords,
+                confidence_scores=combined_confidence_scores
             )
             
         except Exception as e:
@@ -557,5 +641,6 @@ Limit to maximum 10 entities per text."""
                 extracted_entities=[],
                 sentiment=None,
                 topics=[],
-                keywords=[]
+                keywords=[],
+                confidence_scores={"overall": 0.0, "entity_extraction": 0.0, "topic_classification": 0.0, "error": str(e)}
             )

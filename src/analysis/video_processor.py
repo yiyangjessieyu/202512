@@ -216,6 +216,9 @@ class VideoProcessor:
         
         # Extract objects (look for common patterns)
         lines = response_text.lower().split('\n')
+        confidence_indicators = 0
+        total_lines = len([line for line in lines if line.strip()])
+        
         for line in lines:
             if 'object' in line or 'item' in line:
                 # Extract object mentions
@@ -230,17 +233,48 @@ class VideoProcessor:
                     text_part = line.split(':', 1)[1].strip()
                     if text_part:
                         text_overlays.append(text_part)
+            
+            # Look for confidence indicators in the response
+            if any(indicator in line for indicator in ['clear', 'visible', 'obvious', 'definitely', 'certainly']):
+                confidence_indicators += 1
         
         # Remove duplicates
         objects = list(set(objects))
         text_overlays = list(set(text_overlays))
         
+        # Calculate confidence based on response quality
+        base_confidence = 0.6  # Base confidence for GPT-4V
+        
+        # Adjust based on content richness
+        if objects or text_overlays:
+            content_bonus = min(0.2, (len(objects) + len(text_overlays)) * 0.05)
+        else:
+            content_bonus = -0.2  # Penalty for no detected content
+        
+        # Adjust based on confidence indicators in text
+        if total_lines > 0:
+            confidence_ratio = confidence_indicators / total_lines
+            confidence_bonus = confidence_ratio * 0.2
+        else:
+            confidence_bonus = 0
+        
+        # Adjust based on response length (longer responses often indicate more detail)
+        length_bonus = min(0.1, len(response_text) / 1000 * 0.1)
+        
+        final_confidence = max(0.1, min(1.0, base_confidence + content_bonus + confidence_bonus + length_bonus))
+        
         return {
             "objects": objects[:10],  # Limit to top 10
             "text_overlays": text_overlays[:5],  # Limit to top 5
             "scene_description": scene_description,
-            "confidence": 0.8,  # Default confidence
-            "timestamp": timestamp
+            "confidence": final_confidence,
+            "timestamp": timestamp,
+            "confidence_factors": {
+                "base": base_confidence,
+                "content_bonus": content_bonus,
+                "confidence_indicators": confidence_bonus,
+                "length_bonus": length_bonus
+            }
         }
     
     def process_video(self, video_file: VideoFile) -> VideoAnalysis:
@@ -267,7 +301,13 @@ class VideoProcessor:
                     detected_objects=[],
                     text_overlays=[],
                     scene_descriptions=["No frames could be extracted"],
-                    confidence_scores={"overall": 0.0}
+                    confidence_scores={
+                        "overall": 0.0,
+                        "frame_extraction": 0.0,
+                        "object_detection": 0.0,
+                        "text_recognition": 0.0,
+                        "scene_analysis": 0.0
+                    }
                 )
             
             # Analyze each frame with GPT-4V
@@ -275,6 +315,9 @@ class VideoProcessor:
             all_text_overlays = []
             scene_descriptions = []
             confidence_scores = {}
+            frame_analysis_results = []
+            
+            successful_analyses = 0
             
             for i, frame in enumerate(frames):
                 try:
@@ -284,6 +327,8 @@ class VideoProcessor:
                     all_text_overlays.extend(analysis.get("text_overlays", []))
                     scene_descriptions.append(analysis.get("scene_description", ""))
                     confidence_scores[f"frame_{i}"] = analysis.get("confidence", 0.0)
+                    frame_analysis_results.append(analysis)
+                    successful_analyses += 1
                     
                 except Exception as e:
                     logger.error(f"Failed to analyze frame {i}: {str(e)}")
@@ -300,13 +345,15 @@ class VideoProcessor:
             unique_objects = list(set(all_objects))
             unique_text_overlays = list(set(all_text_overlays))
             
-            # Calculate overall confidence
-            frame_confidences = [score for score in confidence_scores.values() if score > 0]
-            overall_confidence = sum(frame_confidences) / len(frame_confidences) if frame_confidences else 0.0
-            confidence_scores["overall"] = overall_confidence
+            # Calculate detailed confidence scores
+            detailed_confidence_scores = self._calculate_video_confidence_scores(
+                frames, frame_analysis_results, unique_objects, unique_text_overlays, 
+                scene_descriptions, successful_analyses
+            )
             
             logger.info(f"Video processing completed. Found {len(unique_objects)} objects, "
-                       f"{len(unique_text_overlays)} text overlays")
+                       f"{len(unique_text_overlays)} text overlays, "
+                       f"overall confidence: {detailed_confidence_scores.get('overall', 0.0):.2f}")
             
             return VideoAnalysis(
                 content_id="",  # Will be set by caller
@@ -314,13 +361,118 @@ class VideoProcessor:
                 detected_objects=unique_objects,
                 text_overlays=unique_text_overlays,
                 scene_descriptions=scene_descriptions,
-                confidence_scores=confidence_scores
+                confidence_scores=detailed_confidence_scores
             )
             
         except Exception as e:
             logger.error(f"Video processing failed for {video_file.file_path}: {str(e)}")
             raise
     
+    def _calculate_video_confidence_scores(self, frames: List[ImageFrame], 
+                                         frame_analyses: List[Dict], objects: List[str], 
+                                         text_overlays: List[str], scene_descriptions: List[str],
+                                         successful_analyses: int) -> Dict[str, float]:
+        """
+        Calculate detailed confidence scores for video analysis.
+        
+        Args:
+            frames: List of extracted frames
+            frame_analyses: List of frame analysis results
+            objects: Detected objects across all frames
+            text_overlays: Detected text overlays
+            scene_descriptions: Scene descriptions from all frames
+            successful_analyses: Number of successful frame analyses
+            
+        Returns:
+            Dictionary of confidence scores
+        """
+        confidence_scores = {}
+        
+        # Frame extraction confidence
+        if len(frames) > 0:
+            confidence_scores["frame_extraction"] = 1.0  # Successful if we got frames
+        else:
+            confidence_scores["frame_extraction"] = 0.0
+        
+        # Analysis success rate
+        if len(frames) > 0:
+            analysis_success_rate = successful_analyses / len(frames)
+            confidence_scores["analysis_success_rate"] = analysis_success_rate
+        else:
+            confidence_scores["analysis_success_rate"] = 0.0
+        
+        # Object detection confidence
+        if frame_analyses:
+            object_confidences = []
+            for analysis in frame_analyses:
+                if analysis.get("objects"):
+                    # Higher confidence if objects detected
+                    object_confidences.append(analysis.get("confidence", 0.0))
+                else:
+                    # Lower confidence if no objects detected
+                    object_confidences.append(analysis.get("confidence", 0.0) * 0.5)
+            
+            if object_confidences:
+                confidence_scores["object_detection"] = sum(object_confidences) / len(object_confidences)
+            else:
+                confidence_scores["object_detection"] = 0.0
+        else:
+            confidence_scores["object_detection"] = 0.0
+        
+        # Text recognition confidence
+        if frame_analyses:
+            text_confidences = []
+            for analysis in frame_analyses:
+                if analysis.get("text_overlays"):
+                    # Higher confidence if text detected
+                    text_confidences.append(analysis.get("confidence", 0.0))
+                else:
+                    # Neutral confidence if no text (text might not be present)
+                    text_confidences.append(analysis.get("confidence", 0.0) * 0.8)
+            
+            if text_confidences:
+                confidence_scores["text_recognition"] = sum(text_confidences) / len(text_confidences)
+            else:
+                confidence_scores["text_recognition"] = 0.0
+        else:
+            confidence_scores["text_recognition"] = 0.0
+        
+        # Scene analysis confidence (based on description quality)
+        if scene_descriptions:
+            scene_confidences = []
+            for i, description in enumerate(scene_descriptions):
+                if description and len(description.strip()) > 20:
+                    # Good description length indicates better analysis
+                    base_conf = frame_analyses[i].get("confidence", 0.0) if i < len(frame_analyses) else 0.5
+                    scene_confidences.append(base_conf)
+                else:
+                    scene_confidences.append(0.3)  # Low confidence for poor descriptions
+            
+            confidence_scores["scene_analysis"] = sum(scene_confidences) / len(scene_confidences)
+        else:
+            confidence_scores["scene_analysis"] = 0.0
+        
+        # Overall confidence (weighted average)
+        weights = {
+            "frame_extraction": 0.1,
+            "analysis_success_rate": 0.2,
+            "object_detection": 0.3,
+            "text_recognition": 0.2,
+            "scene_analysis": 0.2
+        }
+        
+        overall_confidence = 0.0
+        for component, weight in weights.items():
+            overall_confidence += confidence_scores.get(component, 0.0) * weight
+        
+        confidence_scores["overall"] = overall_confidence
+        
+        # Add frame-level confidences for reference
+        for i, analysis in enumerate(frame_analyses):
+            confidence_scores[f"frame_{i}"] = analysis.get("confidence", 0.0)
+        
+        return confidence_scores
+
     def cleanup_temp_files(self, frames: List[ImageFrame]) -> None:
         """
         Clean up temporary frame files.

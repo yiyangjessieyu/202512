@@ -159,15 +159,10 @@ class AudioProcessor:
                         'confidence': segment.get('avg_logprob', 0.0)  # Whisper uses log probabilities
                     })
             
-            # Calculate overall confidence (Whisper doesn't provide this directly)
-            # We'll use a heuristic based on transcript length and segment confidence
-            if segments:
-                avg_confidence = sum(seg.get('confidence', 0) for seg in segments) / len(segments)
-                # Convert log probability to confidence score (rough approximation)
-                confidence = max(0.0, min(1.0, (avg_confidence + 5) / 5))  # Normalize from [-5, 0] to [0, 1]
-            else:
-                # If no segments, estimate confidence based on transcript quality
-                confidence = 0.8 if len(transcript.strip()) > 10 else 0.5
+            # Calculate comprehensive confidence score
+            confidence = self._calculate_audio_confidence_score(
+                transcript, segments, language, audio_file.duration, file_size
+            )
             
             logger.info(f"Transcription completed: {len(transcript)} characters, "
                        f"language: {language}, confidence: {confidence:.2f}")
@@ -191,6 +186,115 @@ class AudioProcessor:
                 confidence=0.0
             )
     
+    def _calculate_audio_confidence_score(self, transcript: str, segments: List[Dict], 
+                                        language: Optional[str], duration: float, 
+                                        file_size: int) -> float:
+        """
+        Calculate comprehensive confidence score for audio transcription.
+        
+        Args:
+            transcript: Transcribed text
+            segments: Transcript segments with timing and confidence
+            language: Detected language
+            duration: Audio duration in seconds
+            file_size: Audio file size in bytes
+            
+        Returns:
+            Overall confidence score (0.0 to 1.0)
+        """
+        confidence_factors = {}
+        
+        # Base confidence from Whisper segments
+        if segments:
+            segment_confidences = [seg.get('confidence', -2.5) for seg in segments]
+            avg_log_prob = sum(segment_confidences) / len(segment_confidences)
+            # Convert log probability to confidence score (Whisper typically ranges from -5 to 0)
+            base_confidence = max(0.0, min(1.0, (avg_log_prob + 5) / 5))
+            confidence_factors["whisper_confidence"] = base_confidence
+        else:
+            # No segments available, use transcript quality heuristic
+            if len(transcript.strip()) > 10:
+                confidence_factors["whisper_confidence"] = 0.6
+            else:
+                confidence_factors["whisper_confidence"] = 0.3
+        
+        # Transcript quality factors
+        transcript_length = len(transcript.strip())
+        
+        # Length-based confidence (reasonable length indicates good transcription)
+        if transcript_length > 50:
+            length_confidence = 0.9
+        elif transcript_length > 20:
+            length_confidence = 0.7
+        elif transcript_length > 5:
+            length_confidence = 0.5
+        else:
+            length_confidence = 0.2
+        
+        confidence_factors["transcript_length"] = length_confidence
+        
+        # Language detection confidence
+        if language and language != 'unknown':
+            confidence_factors["language_detection"] = 0.9
+        else:
+            confidence_factors["language_detection"] = 0.5
+        
+        # Audio quality indicators
+        if duration > 0:
+            # Reasonable speech rate (words per minute)
+            words = len(transcript.split())
+            speech_rate = (words / duration) * 60  # words per minute
+            
+            if 80 <= speech_rate <= 200:  # Normal speech rate
+                confidence_factors["speech_rate"] = 0.9
+            elif 50 <= speech_rate <= 250:  # Acceptable range
+                confidence_factors["speech_rate"] = 0.7
+            else:
+                confidence_factors["speech_rate"] = 0.4
+        else:
+            confidence_factors["speech_rate"] = 0.5
+        
+        # File quality (larger files often have better quality)
+        file_size_mb = file_size / (1024 * 1024)
+        if file_size_mb > 5:
+            confidence_factors["file_quality"] = 0.9
+        elif file_size_mb > 1:
+            confidence_factors["file_quality"] = 0.7
+        else:
+            confidence_factors["file_quality"] = 0.5
+        
+        # Segment consistency (if available)
+        if segments and len(segments) > 1:
+            # Check for consistent confidence across segments
+            segment_confidences = [seg.get('confidence', -2.5) for seg in segments]
+            confidence_variance = max(segment_confidences) - min(segment_confidences)
+            
+            if confidence_variance < 1.0:  # Low variance indicates consistent quality
+                confidence_factors["segment_consistency"] = 0.9
+            elif confidence_variance < 2.0:
+                confidence_factors["segment_consistency"] = 0.7
+            else:
+                confidence_factors["segment_consistency"] = 0.5
+        else:
+            confidence_factors["segment_consistency"] = 0.6  # Neutral for single/no segments
+        
+        # Weighted average of all factors
+        weights = {
+            "whisper_confidence": 0.4,  # Most important - Whisper's own assessment
+            "transcript_length": 0.2,
+            "language_detection": 0.1,
+            "speech_rate": 0.15,
+            "file_quality": 0.1,
+            "segment_consistency": 0.05
+        }
+        
+        overall_confidence = 0.0
+        for factor, weight in weights.items():
+            overall_confidence += confidence_factors.get(factor, 0.5) * weight
+        
+        # Ensure confidence is within valid range
+        return max(0.0, min(1.0, overall_confidence))
+
     def process_video_audio(self, video_file: VideoFile) -> AudioTranscription:
         """
         Extract audio from video and transcribe it.

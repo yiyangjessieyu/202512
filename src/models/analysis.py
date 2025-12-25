@@ -63,6 +63,7 @@ class TextAnalysis(BaseModel):
     sentiment: Optional[str] = Field(None, description="Sentiment analysis")
     topics: List[str] = Field(default_factory=list, description="Identified topics")
     keywords: List[str] = Field(default_factory=list, description="Key terms")
+    confidence_scores: Dict[str, float] = Field(default_factory=dict, description="Confidence scores for different aspects")
 
 
 class VisionAnalysis(BaseModel):
