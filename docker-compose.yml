@@ -1,0 +1,43 @@
+version: '3.8'
+
+services:
+  app:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      - DEBUG=true
+      - MONGODB_URL=mongodb://mongodb:27017
+      - DATABASE_NAME=instagram_analyzer
+    depends_on:
+      - mongodb
+    volumes:
+      - ./temp:/app/temp
+      - ./.env:/app/.env
+    networks:
+      - instagram_analyzer_network
+
+  mongodb:
+    image: mongo:7.0
+    ports:
+      - "27017:27017"
+    environment:
+      - MONGO_INITDB_DATABASE=instagram_analyzer
+    volumes:
+      - mongodb_data:/data/db
+    networks:
+      - instagram_analyzer_network
+
+  redis:
+    image: redis:7.2-alpine
+    ports:
+      - "6379:6379"
+    networks:
+      - instagram_analyzer_network
+
+volumes:
+  mongodb_data:
+
+networks:
+  instagram_analyzer_network:
+    driver: bridge
