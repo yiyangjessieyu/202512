@@ -60,7 +60,7 @@ This implementation plan breaks down the Instagram Content Analyzer into discret
     - Extract audio from video files using ffmpeg
     - _Requirements: 3.2_
 
-  - [ ] 5.3 Create TextProcessor for caption and hashtag analysis
+  - [x] 5.3 Create TextProcessor for caption and hashtag analysis
     - Implement entity extraction using OpenAI GPT models
     - Parse hashtags and categorize content
     - _Requirements: 3.3, 3.4_
@@ -69,7 +69,7 @@ This implementation plan breaks down the Instagram Content Analyzer into discret
     - Add confidence scores to all extracted information
     - _Requirements: 3.5_
 
-  - [ ]* 5.5 Write property test for multi-modal content processing
+  - [ ] 5.5 Write property test for multi-modal content processing
     - **Property 4: Multi-Modal Content Processing**
     - **Validates: Requirements 3.1, 3.2, 3.3, 3.4, 3.5**
 

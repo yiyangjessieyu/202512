@@ -9,6 +9,7 @@ from src.models.analysis import VideoAnalysis, AudioTranscription, TextAnalysis,
 from src.models.content import VideoFile, AudioFile, ImageFrame
 from src.analysis.video_processor import VideoProcessor
 from src.analysis.audio_processor import AudioProcessor
+from src.analysis.text_processor import TextProcessor
 
 
 @dataclass
@@ -19,6 +20,7 @@ class MultiModalAnalyzer:
         """Initialize the multi-modal analyzer."""
         self.video_processor = VideoProcessor()
         self.audio_processor = AudioProcessor()
+        self.text_processor = TextProcessor()
     
     def process_video(self, video_file: VideoFile) -> VideoAnalysis:
         """
@@ -66,8 +68,7 @@ class MultiModalAnalyzer:
         Returns:
             Text analysis results
         """
-        # TODO: Implement text analysis with OpenAI GPT
-        pass
+        return self.text_processor.process_text_content(text_content)
     
     def process_images(self, image_frames: List[ImageFrame]) -> VisionAnalysis:
         """
