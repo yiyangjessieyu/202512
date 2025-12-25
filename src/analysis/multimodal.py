@@ -7,6 +7,7 @@ from dataclasses import dataclass
 
 from src.models.analysis import VideoAnalysis, AudioTranscription, TextAnalysis, VisionAnalysis
 from src.models.content import VideoFile, AudioFile, ImageFrame
+from src.analysis.video_processor import VideoProcessor
 
 
 @dataclass
@@ -15,7 +16,7 @@ class MultiModalAnalyzer:
     
     def __init__(self):
         """Initialize the multi-modal analyzer."""
-        pass
+        self.video_processor = VideoProcessor()
     
     def process_video(self, video_file: VideoFile) -> VideoAnalysis:
         """
@@ -27,8 +28,7 @@ class MultiModalAnalyzer:
         Returns:
             Video analysis results
         """
-        # TODO: Implement video processing with OpenCV and GPT-4V
-        pass
+        return self.video_processor.process_video(video_file)
     
     def process_audio(self, audio_file: AudioFile) -> AudioTranscription:
         """

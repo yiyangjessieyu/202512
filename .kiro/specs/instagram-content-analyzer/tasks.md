@@ -50,7 +50,7 @@ This implementation plan breaks down the Instagram Content Analyzer into discret
   - Ensure all tests pass, ask the user if questions arise.
 
 - [ ] 5. Implement multi-modal analysis pipeline
-  - [ ] 5.1 Create VideoProcessor for frame extraction and analysis
+  - [x] 5.1 Create VideoProcessor for frame extraction and analysis
     - Use OpenCV for frame extraction
     - Integrate GPT-4V for visual analysis
     - _Requirements: 3.1_
