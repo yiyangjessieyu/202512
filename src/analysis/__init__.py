@@ -1,6 +1,7 @@
 # Multi-modal analysis module
 
 from .video_processor import VideoProcessor
+from .audio_processor import AudioProcessor
 from .multimodal import MultiModalAnalyzer
 
-__all__ = ["VideoProcessor", "MultiModalAnalyzer"]
+__all__ = ["VideoProcessor", "AudioProcessor", "MultiModalAnalyzer"]

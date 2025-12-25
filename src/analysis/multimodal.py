@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from src.models.analysis import VideoAnalysis, AudioTranscription, TextAnalysis, VisionAnalysis
 from src.models.content import VideoFile, AudioFile, ImageFrame
 from src.analysis.video_processor import VideoProcessor
+from src.analysis.audio_processor import AudioProcessor
 
 
 @dataclass
@@ -17,6 +18,7 @@ class MultiModalAnalyzer:
     def __init__(self):
         """Initialize the multi-modal analyzer."""
         self.video_processor = VideoProcessor()
+        self.audio_processor = AudioProcessor()
     
     def process_video(self, video_file: VideoFile) -> VideoAnalysis:
         """
@@ -40,8 +42,19 @@ class MultiModalAnalyzer:
         Returns:
             Audio transcription results
         """
-        # TODO: Implement audio processing with Whisper
-        pass
+        return self.audio_processor.process_audio_file(audio_file)
+    
+    def process_video_audio(self, video_file: VideoFile) -> AudioTranscription:
+        """
+        Extracts audio from video and transcribes it.
+        
+        Args:
+            video_file: Video file to process
+            
+        Returns:
+            Audio transcription results
+        """
+        return self.audio_processor.process_video_audio(video_file)
     
     def process_text(self, text_content: str) -> TextAnalysis:
         """

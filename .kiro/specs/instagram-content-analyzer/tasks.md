@@ -55,7 +55,7 @@ This implementation plan breaks down the Instagram Content Analyzer into discret
     - Integrate GPT-4V for visual analysis
     - _Requirements: 3.1_
 
-  - [ ] 5.2 Create AudioProcessor for transcription
+  - [x] 5.2 Create AudioProcessor for transcription
     - Use OpenAI Whisper for audio transcription
     - Extract audio from video files using ffmpeg
     - _Requirements: 3.2_
