@@ -22,9 +22,8 @@ def demo_text_processor():
     processor = TextProcessor()
     
     # Test caption
-    caption = """Amazing dinner at Pizza Palace! The food was incredible and the service was outstanding. 
-    Highly recommend the margherita pizza and tiramisu. Perfect date night spot! 
-    #food #restaurant #italian #pizza #datenight #delicious #foodie #yummy"""
+    caption = """ Every business starts with zero – zero customers, zero reputation, and sometimes even zero resources. This is the stage where vision, passion, and determination matter the most. Starting from nothing allows entrepreneurs to build their ventures from the ground up, learning valuable lessons along the way. It’s not about having everything at the beginning; it’s about taking the first step with what you have. Many successful companies today, from global brands to local enterprises, began as small ideas with limited means. What sets them apart is consistency, innovation, and the courage to keep moving forward despite challenges. Starting at zero is not a disadvantage but an opportunity to create something unique, to grow, and to leave a mark. Every great business story begins with that bold decision to start from nothing.
+    #motivation #success #inspiration #motivationtoday #successvideos #inspirationalquotes #reels #reelsforyou #reelsfeelit #trending #viral #explorepage #BusinessBoss #MillionDollarMoves #creditpower"""
     
     print(f"Sample Caption:\n{caption}\n")
     
